@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { logger } = require('../../../logging_middleware/index');
+const { Log } = require('../../../logging_middleware/index');
 const cache = {
     depots: { data: null, timestamp: null },
     vehicles: { data: null, timestamp: null }
@@ -31,7 +31,7 @@ const fetchDepots = async () => {
         }
         return depotsData;
     } catch (error) {
-        logger.error(`Error fetching depots: ${error.message}`);
+        Log("backend", "error", "api", `Failure while fetching depots from Evaluation Service API: ${error.message}`);
         throw new Error(`Failed to fetch depots: ${error.message}`);
     }
 };
@@ -51,7 +51,7 @@ const fetchVehicles = async () => {
         }
         return vehiclesData;
     } catch (error) {
-        logger.error(`Error fetching vehicles: ${error.message}`);
+        Log("backend", "error", "api", `Failure while fetching vehicles from Evaluation Service API: ${error.message}`);
         throw new Error(`Failed to fetch vehicles: ${error.message}`);
     }
 };

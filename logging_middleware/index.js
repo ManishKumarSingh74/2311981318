@@ -1,31 +1,56 @@
-const fs = require('fs');
-const path = require('path');
+let fetchClient;
+if (typeof fetch === 'undefined') {
+    fetchClient = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+} else {
+    fetchClient = fetch;
+}
 
-const logFilePath = path.join(__dirname, 'system.log');
+async function Log(stack, level, packageName, message) {
+    try {
+        const url = process.env.TEST_SERVER_URL || 'http://20.207.122.201/evaluation-service/logs';
+        
+        const payload = {
+            stack: (stack || "backend").toLowerCase(),
+            level: (level || "info").toLowerCase(),
+            package: (packageName || "unknown").toLowerCase(),
+            message: message || ""
+        };
 
-const writeLog = (level, message) => {
-    const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] [${level}] ${message}\n`;
-    fs.appendFileSync(logFilePath, logMessage);
-};
-
-const logger = {
-    info: (msg) => writeLog('INFO', msg),
-    error: (msg) => writeLog('ERROR', msg),
-    warn: (msg) => writeLog('WARN', msg)
-};
+        fetchClient(url, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.AUTH_TOKEN || 'test-token'}`
+            },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+        
+    } catch (err) {}
+}
 
 const loggingMiddleware = (req, res, next) => {
-    logger.info(`Incoming Request: ${req.method} ${req.originalUrl}`);
+    Log(
+        "backend",
+        "info",
+        "middleware",
+        `Incoming HTTP Request: Method=${req.method}, URL=${req.originalUrl}, IP=${req.ip}`
+    );
+
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
-        logger.info(`Response: ${req.method} ${req.originalUrl} - Status: ${res.statusCode} - Duration: ${duration}ms`);
+        Log(
+            "backend",
+            res.statusCode >= 400 ? "warn" : "info",
+            "middleware",
+            `Completed HTTP Request: Method=${req.method}, URL=${req.originalUrl}, Status=${res.statusCode}, Duration=${duration}ms`
+        );
     });
+
     next();
 };
 
 module.exports = {
-    logger,
+    Log,
     loggingMiddleware
 };

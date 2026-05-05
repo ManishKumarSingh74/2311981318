@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { logger } = require('../logging_middleware/index');
+const { Log } = require('../logging_middleware/index');
 
 async function getPriorityInbox() {
     try {
@@ -9,14 +9,14 @@ async function getPriorityInbox() {
         try {
             response = await axios.get(url);
         } catch(error) {
-            logger.error(`Failed to fetch notifications: ${error.message}`);
+            Log("backend", "error", "api", `Network or parsing error when calling Notifications API: ${error.message}`);
             return;
         }
 
         const notifications = response.data.notifications || response.data || [];
         
         if (notifications.length === 0) {
-            logger.info("No notifications found.");
+            Log("backend", "info", "api", "Successfully fetched notifications but the payload was empty.");
             return;
         }
 
@@ -44,13 +44,13 @@ async function getPriorityInbox() {
 
         const top10 = notifications.slice(0, 10);
         
-        logger.info("--- TOP 10 PRIORITY INBOX ---");
+        Log("backend", "info", "handler", "Calculated and displaying top 10 priority notifications for user inbox.");
         top10.forEach((n, i) => {
-            logger.info(`${i+1}. [${(n.Type || 'UNKNOWN').toUpperCase()}] ${n.Message} (ID: ${n.ID}) - ${n.Timestamp}`);
+            Log("backend", "info", "handler", `${i+1}. [${(n.Type || 'UNKNOWN').toUpperCase()}] ${n.Message} (ID: ${n.ID}) - ${n.Timestamp}`);
         });
         
     } catch (error) {
-        logger.error(`Error: ${error}`);
+        Log("backend", "fatal", "handler", `Unexpected fatal error in priority inbox processor: ${error.message}`);
     }
 }
 
