@@ -1,34 +1,34 @@
-let fetchClient;
+let myFetch;
 if (typeof fetch === 'undefined') {
-    fetchClient = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    myFetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
 } else {
-    fetchClient = fetch;
+    myFetch = fetch;
 }
 
 async function Log(stack, level, packageName, message) {
     try {
-        const url = process.env.TEST_SERVER_URL || 'http://20.207.122.201/evaluation-service/logs';
+        const targetUrl = process.env.TEST_SERVER_URL || 'http://20.207.122.201/evaluation-service/logs';
         
-        const payload = {
+        const data = {
             stack: (stack || "backend").toLowerCase(),
             level: (level || "info").toLowerCase(),
             package: (packageName || "unknown").toLowerCase(),
             message: message || ""
         };
 
-        fetchClient(url, {
+        myFetch(targetUrl, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${process.env.AUTH_TOKEN || 'test-token'}`
             },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(data)
         }).catch(() => {});
         
-    } catch (err) {}
+    } catch (e) {}
 }
 
-const loggingMiddleware = (req, res, next) => {
+const reqLogger = (req, res, next) => {
     Log(
         "backend",
         "info",
@@ -36,14 +36,19 @@ const loggingMiddleware = (req, res, next) => {
         `Incoming HTTP Request: Method=${req.method}, URL=${req.originalUrl}, IP=${req.ip}`
     );
 
-    const start = Date.now();
+    const t0 = Date.now();
     res.on('finish', () => {
-        const duration = Date.now() - start;
+        const timeTaken = Date.now() - t0;
+        let lvl = "info";
+        if (res.statusCode >= 400) {
+            lvl = "warn";
+        }
+        
         Log(
             "backend",
-            res.statusCode >= 400 ? "warn" : "info",
+            lvl,
             "middleware",
-            `Completed HTTP Request: Method=${req.method}, URL=${req.originalUrl}, Status=${res.statusCode}, Duration=${duration}ms`
+            `Completed HTTP Request: Method=${req.method}, URL=${req.originalUrl}, Status=${res.statusCode}, Duration=${timeTaken}ms`
         );
     });
 
@@ -52,5 +57,5 @@ const loggingMiddleware = (req, res, next) => {
 
 module.exports = {
     Log,
-    loggingMiddleware
+    loggingMiddleware: reqLogger
 };

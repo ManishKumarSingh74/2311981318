@@ -3,54 +3,54 @@ const { Log } = require('../logging_middleware/index');
 
 async function getPriorityInbox() {
     try {
-        const url = process.env.NOTIFICATIONS_API_URL || 'http://20.207.122.201/evaluation-service/notifications';
+        const inboxUrl = process.env.NOTIFICATIONS_API_URL || 'http://20.207.122.201/evaluation-service/notifications';
         
-        let response;
+        let res;
         try {
-            response = await axios.get(url);
-        } catch(error) {
-            Log("backend", "error", "api", `Network or parsing error when calling Notifications API: ${error.message}`);
+            res = await axios.get(inboxUrl);
+        } catch(err) {
+            Log("backend", "error", "api", `Network or parsing error when calling Notifications API: ${err.message}`);
             return;
         }
 
-        const notifications = response.data.notifications || response.data || [];
+        const items = res.data.notifications || res.data || [];
         
-        if (notifications.length === 0) {
+        if (items.length === 0) {
             Log("backend", "info", "api", "Successfully fetched notifications but the payload was empty.");
             return;
         }
 
-        const getWeight = (type) => {
-            const t = (type || '').toLowerCase();
-            if (t === 'placement') return 3;
-            if (t === 'result') return 2;
-            if (t === 'event') return 1;
+        const calcScore = (typeStr) => {
+            const val = (typeStr || '').toLowerCase();
+            if (val === 'placement') return 3;
+            if (val === 'result') return 2;
+            if (val === 'event') return 1;
             return 0;
         };
 
-        notifications.sort((a, b) => {
-            const weightA = getWeight(a.Type);
-            const weightB = getWeight(b.Type);
+        items.sort((item1, item2) => {
+            const w1 = calcScore(item1.Type);
+            const w2 = calcScore(item2.Type);
             
-            if (weightA !== weightB) {
-                return weightB - weightA;
+            if (w1 !== w2) {
+                return w2 - w1;
             }
             
-            const timeA = new Date(a.Timestamp).getTime();
-            const timeB = new Date(b.Timestamp).getTime();
+            const t1 = new Date(item1.Timestamp).getTime();
+            const t2 = new Date(item2.Timestamp).getTime();
             
-            return timeB - timeA;
+            return t2 - t1;
         });
 
-        const top10 = notifications.slice(0, 10);
+        const sliced = items.slice(0, 10);
         
         Log("backend", "info", "handler", "Calculated and displaying top 10 priority notifications for user inbox.");
-        top10.forEach((n, i) => {
-            Log("backend", "info", "handler", `${i+1}. [${(n.Type || 'UNKNOWN').toUpperCase()}] ${n.Message} (ID: ${n.ID}) - ${n.Timestamp}`);
+        sliced.forEach((notify, idx) => {
+            Log("backend", "info", "handler", `${idx+1}. [${(notify.Type || 'UNKNOWN').toUpperCase()}] ${notify.Message} (ID: ${notify.ID}) - ${notify.Timestamp}`);
         });
         
-    } catch (error) {
-        Log("backend", "fatal", "handler", `Unexpected fatal error in priority inbox processor: ${error.message}`);
+    } catch (e) {
+        Log("backend", "fatal", "handler", `Unexpected fatal error in priority inbox processor: ${e.message}`);
     }
 }
 

@@ -1,133 +1,154 @@
-const knapsack01 = (items, capacity) => {
-    const n = items.length;
-    const dp = Array(n + 1).fill(0).map(() => Array(capacity + 1).fill(0));
-    for (let i = 1; i <= n; i++) {
-        const item = items[i - 1];
-        const weight = item.Duration;
-        const value = item.Impact;
-        for (let w = 0; w <= capacity; w++) {
-            if (weight <= w) {
-                dp[i][w] = Math.max(value + dp[i - 1][w - weight], dp[i - 1][w]);
+const optimizeDepotTasks = (tasks, budget) => {
+    const numTasks = tasks.length;
+    const table = Array(numTasks + 1).fill(0).map(() => Array(budget + 1).fill(0));
+    
+    for (let i = 1; i <= numTasks; i++) {
+        const currentTask = tasks[i - 1];
+        const cost = currentTask.Duration;
+        const score = currentTask.Impact;
+        
+        for (let b = 0; b <= budget; b++) {
+            if (cost <= b) {
+                table[i][b] = Math.max(score + table[i - 1][b - cost], table[i - 1][b]);
             } else {
-                dp[i][w] = dp[i - 1][w];
+                table[i][b] = table[i - 1][b];
             }
         }
     }
-    const selectedTaskIds = [];
-    let w = capacity;
-    let totalDuration = 0;
-    for (let i = n; i > 0 && dp[i][w] > 0; i--) {
-        if (dp[i][w] !== dp[i - 1][w]) {
-            const item = items[i - 1];
-            selectedTaskIds.push(item.TaskID);
-            totalDuration += item.Duration;
-            w -= item.Duration;
+    
+    const chosenTasks = [];
+    let budgetLeft = budget;
+    let timeSpent = 0;
+    
+    for (let i = numTasks; i > 0 && table[i][budgetLeft] > 0; i--) {
+        if (table[i][budgetLeft] !== table[i - 1][budgetLeft]) {
+            const currentTask = tasks[i - 1];
+            chosenTasks.push(currentTask.TaskID);
+            timeSpent += currentTask.Duration;
+            budgetLeft -= currentTask.Duration;
         }
     }
+    
     return {
-        selectedTaskIds,
-        totalImpact: dp[n][capacity],
-        totalDuration
+        selectedTaskIds: chosenTasks,
+        totalImpact: table[numTasks][budget],
+        totalDuration: timeSpent
     };
 };
-const knapsackGreedy = (items, capacity) => {
-    const sortedItems = [...items].sort((a, b) => {
-        const densityA = a.Impact / a.Duration;
-        const densityB = b.Impact / b.Duration;
-        return densityB - densityA; 
+
+const optimizeGreedy = (tasks, budget) => {
+    const ordered = [...tasks].sort((task1, task2) => {
+        const ratio1 = task1.Impact / task1.Duration;
+        const ratio2 = task2.Impact / task2.Duration;
+        return ratio2 - ratio1; 
     });
-    const selectedTaskIds = [];
-    let currentWeight = 0;
-    let totalImpact = 0;
-    for (const item of sortedItems) {
-        if (currentWeight + item.Duration <= capacity) {
-            selectedTaskIds.push(item.TaskID);
-            currentWeight += item.Duration;
-            totalImpact += item.Impact;
+    
+    const chosenTasks = [];
+    let usedBudget = 0;
+    let accumulatedScore = 0;
+    
+    for (const t of ordered) {
+        if (usedBudget + t.Duration <= budget) {
+            chosenTasks.push(t.TaskID);
+            usedBudget += t.Duration;
+            accumulatedScore += t.Impact;
         }
     }
+    
     return {
-        selectedTaskIds,
-        totalImpact,
-        totalDuration: currentWeight
+        selectedTaskIds: chosenTasks,
+        totalImpact: accumulatedScore,
+        totalDuration: usedBudget
     };
 };
+
 const scheduleVehicles = (vehicles, depots, algorithm = 'dp') => {
-    let remainingVehicles = [...vehicles];
-    const schedule = {};
-    const selectedVehiclesMap = {};
-    let totalOverallImpact = 0;
-    let totalOverallDuration = 0;
-    const metrics = {};
-    const vehicleLookup = vehicles.reduce((acc, v) => {
+    let unassigned = [...vehicles];
+    const finalPlan = {};
+    const vehiclesData = {};
+    let sumImpact = 0;
+    let sumDuration = 0;
+    const stats = {};
+    
+    const mapTasks = vehicles.reduce((acc, v) => {
         acc[v.TaskID] = v;
         return acc;
     }, {});
-    for (const depot of depots) {
-        const depotId = depot.ID;
-        const capacity = depot.MechanicHours;
-        let result;
+    
+    for (const d of depots) {
+        const id = d.ID;
+        const limit = d.MechanicHours;
+        
+        let output;
         if (algorithm === 'greedy') {
-            result = knapsackGreedy(remainingVehicles, capacity);
+            output = optimizeGreedy(unassigned, limit);
         } else {
-            result = knapsack01(remainingVehicles, capacity);
+            output = optimizeDepotTasks(unassigned, limit);
         }
-        schedule[depotId] = result.selectedTaskIds;
-        totalOverallImpact += result.totalImpact;
-        totalOverallDuration += result.totalDuration;
-        const budgetUsed = result.totalDuration;
-        const budgetUtilization = capacity > 0 ? (budgetUsed / capacity) * 100 : 0;
-        metrics[depotId] = {
-            budgetUsed,
-            capacity,
-            budgetUtilization: `${budgetUtilization.toFixed(2)}%`,
-            vehiclesSelected: result.selectedTaskIds.length,
-            availableVehiclesAtStart: remainingVehicles.length
+        
+        finalPlan[id] = output.selectedTaskIds;
+        sumImpact += output.totalImpact;
+        sumDuration += output.totalDuration;
+        
+        const used = output.totalDuration;
+        const perc = limit > 0 ? (used / limit) * 100 : 0;
+        
+        stats[id] = {
+            budgetUsed: used,
+            capacity: limit,
+            budgetUtilization: `${perc.toFixed(2)}%`,
+            vehiclesSelected: output.selectedTaskIds.length,
+            availableVehiclesAtStart: unassigned.length
         };
-        result.selectedTaskIds.forEach(taskId => {
-            selectedVehiclesMap[taskId] = vehicleLookup[taskId];
+        
+        output.selectedTaskIds.forEach(tid => {
+            vehiclesData[tid] = mapTasks[tid];
         });
-        const selectedSet = new Set(result.selectedTaskIds);
-        remainingVehicles = remainingVehicles.filter(v => !selectedSet.has(v.TaskID));
+        
+        const picked = new Set(output.selectedTaskIds);
+        unassigned = unassigned.filter(v => !picked.has(v.TaskID));
     }
+    
     return {
-        schedule,
-        selectedVehicles: selectedVehiclesMap,
-        totalImpact: totalOverallImpact,
-        totalDuration: totalOverallDuration,
-        metrics
+        schedule: finalPlan,
+        selectedVehicles: vehiclesData,
+        totalImpact: sumImpact,
+        totalDuration: sumDuration,
+        metrics: stats
     };
 };
-const validateInput = (vehicles, depots) => {
+
+const checkData = (vehicles, depots) => {
     if (!vehicles || !Array.isArray(vehicles) || vehicles.length === 0) {
         throw new Error('Vehicles array is missing or empty');
     }
     if (!depots || !Array.isArray(depots) || depots.length === 0) {
         throw new Error('Depots array is missing or empty');
     }
-    for (const vehicle of vehicles) {
-        if (!vehicle.TaskID || vehicle.Duration === undefined || vehicle.Impact === undefined) {
-            throw new Error(`Vehicle ${vehicle.TaskID || 'unknown'} is missing required fields`);
+    for (const v of vehicles) {
+        if (!v.TaskID || v.Duration === undefined || v.Impact === undefined) {
+            throw new Error(`Vehicle ${v.TaskID || 'unknown'} is missing required fields`);
         }
-        if (vehicle.Duration <= 0) {
-            throw new Error(`Vehicle ${vehicle.TaskID} has invalid duration`);
+        if (v.Duration <= 0) {
+            throw new Error(`Vehicle ${v.TaskID} has invalid duration`);
         }
-        if (vehicle.Impact < 0) {
-            throw new Error(`Vehicle ${vehicle.TaskID} has invalid impact`);
+        if (v.Impact < 0) {
+            throw new Error(`Vehicle ${v.TaskID} has invalid impact`);
         }
     }
-    for (const depot of depots) {
-        if (!depot.ID || depot.MechanicHours === undefined) {
-            throw new Error(`Depot ${depot.ID || 'unknown'} is missing required fields`);
+    for (const d of depots) {
+        if (!d.ID || d.MechanicHours === undefined) {
+            throw new Error(`Depot ${d.ID || 'unknown'} is missing required fields`);
         }
-        if (depot.MechanicHours < 0) {
-            throw new Error(`Depot ${depot.ID} has invalid MechanicHours`);
+        if (d.MechanicHours < 0) {
+            throw new Error(`Depot ${d.ID} has invalid MechanicHours`);
         }
     }
 };
+
 module.exports = {
-    knapsack01,
-    knapsackGreedy,
+    optimizeDepotTasks,
+    optimizeGreedy,
     scheduleVehicles,
-    validateInput
+    checkData
 };

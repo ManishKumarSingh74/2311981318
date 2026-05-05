@@ -35,7 +35,7 @@ router.post('/optimize', async (req, res, next) => {
             }
         }
         const vehiclesToProcess = allVehicles;
-        optimizationService.validateInput(vehiclesToProcess, depotsToProcess);
+        optimizationService.checkData(vehiclesToProcess, depotsToProcess);
         const result = optimizationService.scheduleVehicles(vehiclesToProcess, depotsToProcess, algorithm);
         const end = performance.now();
         const executionTimeMs = (end - start).toFixed(2);
@@ -73,7 +73,7 @@ router.post('/optimize-depot/:id', async (req, res, next) => {
             throw error;
         }
         const vehiclesToProcess = allVehicles;
-        optimizationService.validateInput(vehiclesToProcess, [depot]);
+        optimizationService.checkData(vehiclesToProcess, [depot]);
         const result = optimizationService.scheduleVehicles(vehiclesToProcess, [depot], algorithm);
         const end = performance.now();
         const executionTimeMs = (end - start).toFixed(2);
